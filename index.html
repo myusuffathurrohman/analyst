@@ -153,8 +153,35 @@
       </div>
     </div>
     <div class="topbar-right">
-      <span class="badge badge-green" id="status-badge">● Siap</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:11px;color:var(--text3);">API Key:</span>
+        <input type="password" id="api-key-input" placeholder="AIza..." 
+          style="width:180px;padding:5px 10px;font-size:11px;font-family:'DM Mono',monospace;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);outline:none;"
+          oninput="onApiKeyChange(this.value)"
+          onfocus="this.style.borderColor='var(--accent)'" 
+          onblur="this.style.borderColor='var(--border)'" />
+        <span id="key-status" style="font-size:18px;" title="API Key belum diisi">🔴</span>
+      </div>
       <span class="badge badge-blue" id="sheet-count-badge">0 Sheet</span>
+    </div>
+  </div>
+  <!-- API Key modal on first load -->
+  <div id="api-modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:999;">
+    <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:28px 32px;width:420px;max-width:90vw;">
+      <div style="font-size:20px;margin-bottom:6px;">🔑</div>
+      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px;">Masukkan Google Gemini API Key</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:18px;line-height:1.6;">
+        Key hanya tersimpan di memori browser Anda — tidak dikirim atau disimpan di server manapun.<br><br>
+        Belum punya key? Daftar <b style="color:var(--green);">GRATIS</b> di <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com/apikey</a> — tidak perlu kartu kredit.
+      </div>
+      <input type="password" id="modal-key-input" placeholder="AIzaSy..." 
+        style="width:100%;padding:10px 14px;font-size:13px;font-family:'DM Mono',monospace;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text);outline:none;margin-bottom:10px;"
+        onkeydown="if(event.key==='Enter')saveApiKey()" />
+      <div id="modal-error" style="font-size:11px;color:var(--red);margin-bottom:8px;display:none;"></div>
+      <button onclick="saveApiKey()" style="width:100%;padding:10px;font-size:13px;font-family:'DM Sans',sans-serif;font-weight:500;background:var(--accent);color:#fff;border:none;border-radius:10px;cursor:pointer;">
+        Simpan &amp; Mulai →
+      </button>
+      <div style="font-size:11px;color:var(--text3);margin-top:10px;text-align:center;">Key tidak tersimpan permanen — akan hilang saat tab ditutup</div>
     </div>
   </div>
 
@@ -219,10 +246,37 @@
 
 <script>
 // ─── State ───────────────────────────────────────────────────────────────────
+let apiKey = '';
 const sheets = [];
 let activeSheetIdx = -1;
 let isBusy = false;
 let chartInstances = {};
+
+// ─── API Key Management ───────────────────────────────────────────────────────
+function saveApiKey() {
+  const input = document.getElementById('modal-key-input');
+  const key = input.value.trim();
+  const errEl = document.getElementById('modal-error');
+  if (!key.startsWith('AIza') || key.length < 30) {
+    errEl.textContent = 'Format key tidak valid. Gemini API key diawali dengan "AIza..."';
+    errEl.style.display = 'block'; return;
+  }
+  apiKey = key;
+  document.getElementById('api-key-input').value = key;
+  document.getElementById('api-modal').style.display = 'none';
+  document.getElementById('key-status').textContent = '🟢';
+  document.getElementById('key-status').title = 'Gemini API Key aktif';
+}
+
+function onApiKeyChange(val) {
+  apiKey = val.trim();
+  const status = document.getElementById('key-status');
+  if (apiKey.startsWith('AIza') && apiKey.length >= 30) {
+    status.textContent = '🟢'; status.title = 'Gemini API Key aktif';
+  } else {
+    status.textContent = '🔴'; status.title = 'API Key belum valid';
+  }
+}
 
 // ─── Sheet Loading ────────────────────────────────────────────────────────────
 function extractSheetId(url) {
@@ -459,6 +513,7 @@ async function sendMsg() {
   inp.value = ''; inp.style.height = '40px';
 
   if (!sheets.length) { showToast('Tambahkan Google Sheet terlebih dahulu'); return; }
+  if (!apiKey) { showToast('Masukkan Gemini API Key terlebih dahulu'); document.getElementById('api-modal').style.display='flex'; return; }
 
   addMsg('user', q);
   isBusy = true;
@@ -516,18 +571,18 @@ Maksimal 10 baris untuk tabel.
 7. Boleh kombinasikan teks + chart/kpi/table dalam satu respons.`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1200,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: q }]
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: q }] }],
+        generationConfig: { maxOutputTokens: 1500, temperature: 0.3 }
       })
     });
     const data = await res.json();
-    const raw = data.content?.map(b => b.text || '').join('') || 'Tidak ada respons.';
+    if (data.error) throw new Error(data.error.message || 'Gemini API error');
+    const raw = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || 'Tidak ada respons.';
 
     hideTyping();
 
@@ -556,7 +611,10 @@ Maksimal 10 baris untuk tabel.
 
   } catch(e) {
     hideTyping();
-    addMsg('ai', `<b>Error:</b> ${e.message}. Pastikan Anda terhubung ke internet.`);
+    const msg = e.message.includes('fetch')
+      ? 'Gagal terhubung ke Gemini. Periksa koneksi internet atau validitas API Key Anda.'
+      : e.message;
+    addMsg('ai', `<b>Error:</b> ${msg}`);
   } finally {
     isBusy = false;
     document.getElementById('send-btn').disabled = false;
