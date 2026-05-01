@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Analyst Perencanaan & Evaluasi</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --bg2: #171b26;
+    --bg3: #1e2333;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #e8eaf0;
+    --text2: #8b91a8;
+    --text3: #555c75;
+    --accent: #5b7fff;
+    --accent2: #3d5fdb;
+    --green: #3ecf8e;
+    --amber: #f59e0b;
+    --red: #f87171;
+    --purple: #a78bfa;
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* Layout */
+  .app { display: flex; flex-direction: column; height: 100vh; max-height: 100vh; overflow: hidden; }
+  .topbar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--bg2); flex-shrink: 0; }
+  .logo { display: flex; align-items: center; gap: 8px; }
+  .logo-icon { width: 28px; height: 28px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .logo-text { font-size: 13px; font-weight: 600; color: var(--text); }
+  .logo-sub { font-size: 11px; color: var(--text3); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .badge { font-size: 10px; padding: 3px 8px; border-radius: 20px; font-family: 'DM Mono', monospace; }
+  .badge-green { background: rgba(62,207,142,0.12); color: var(--green); border: 1px solid rgba(62,207,142,0.2); }
+  .badge-blue { background: rgba(91,127,255,0.12); color: var(--accent); border: 1px solid rgba(91,127,255,0.2); }
+
+  .main { display: flex; flex: 1; min-height: 0; }
+
+  /* Sidebar */
+  .sidebar { width: 230px; border-right: 1px solid var(--border); background: var(--bg2); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+  .sidebar-section { padding: 14px 14px 8px; }
+  .sidebar-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; font-weight: 500; }
+  .sheet-input-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .sheet-url-input { width: 100%; padding: 7px 10px; font-size: 11px; font-family: 'DM Mono', monospace; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); outline: none; resize: none; min-height: 56px; }
+  .sheet-url-input:focus { border-color: var(--accent); }
+  .load-btn { padding: 7px 10px; font-size: 12px; font-family: 'DM Sans', sans-serif; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); cursor: pointer; font-weight: 500; transition: background 0.15s; }
+  .load-btn:hover { background: var(--accent2); }
+  .load-btn:disabled { opacity: 0.5; cursor: default; }
+  .divider { height: 1px; background: var(--border); margin: 8px 0; }
+  .sheet-list { display: flex; flex-direction: column; gap: 2px; padding: 0 8px 8px; }
+  .sheet-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--radius); cursor: pointer; font-size: 12px; color: var(--text2); border: 1px solid transparent; transition: all 0.12s; }
+  .sheet-item:hover { background: var(--bg3); color: var(--text); }
+  .sheet-item.active { background: rgba(91,127,255,0.12); color: var(--accent); border-color: rgba(91,127,255,0.2); }
+  .sheet-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .sheet-name-wrap { flex: 1; min-width: 0; }
+  .sheet-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sheet-rows { font-size: 10px; color: var(--text3); }
+  .remove-btn { opacity: 0; font-size: 14px; color: var(--text3); cursor: pointer; padding: 0 2px; line-height: 1; transition: opacity 0.12s; }
+  .sheet-item:hover .remove-btn { opacity: 1; }
+
+  /* Content */
+  .content { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .chat-container { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+
+  /* Messages */
+  .msg-wrap { display: flex; gap: 10px; align-items: flex-start; animation: fadeIn 0.2s ease; }
+  .msg-wrap.user { flex-direction: row-reverse; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .av { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+  .av.ai { background: var(--accent); color: #fff; }
+  .av.user { background: var(--bg3); color: var(--text2); border: 1px solid var(--border2); }
+  .bubble { max-width: 78%; padding: 10px 14px; border-radius: 4px 12px 12px 12px; font-size: 13.5px; line-height: 1.6; }
+  .bubble.ai { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+  .bubble.user { background: rgba(91,127,255,0.18); color: var(--text); border: 1px solid rgba(91,127,255,0.25); border-radius: 12px 4px 12px 12px; }
+  .bubble b { color: var(--accent); font-weight: 600; }
+  .bubble ul { margin: 6px 0 0 16px; }
+  .bubble li { margin-bottom: 3px; }
+
+  /* Chart in bubble */
+  .chart-wrap { margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: var(--radius); border: 1px solid var(--border); }
+  .chart-title { font-size: 11px; color: var(--text3); margin-bottom: 8px; font-family: 'DM Mono', monospace; }
+
+  /* KPI row */
+  .kpi-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .kpi-card { flex: 1; min-width: 90px; padding: 8px 10px; background: rgba(0,0,0,0.3); border-radius: var(--radius); border: 1px solid var(--border); }
+  .kpi-val { font-size: 20px; font-weight: 600; color: var(--text); font-family: 'DM Mono', monospace; }
+  .kpi-lbl { font-size: 10px; color: var(--text3); margin-top: 2px; }
+  .kpi-trend { font-size: 10px; margin-top: 3px; }
+  .trend-up { color: var(--green); }
+  .trend-dn { color: var(--red); }
+
+  /* Table in bubble */
+  .data-table-wrap { margin-top: 10px; overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .data-table th { background: rgba(91,127,255,0.08); color: var(--accent); font-weight: 500; padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .data-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); color: var(--text2); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: rgba(255,255,255,0.02); color: var(--text); }
+
+  /* Typing indicator */
+  .typing-dots { display: flex; gap: 4px; align-items: center; padding: 4px 0; }
+  .typing-dots span { width: 5px; height: 5px; border-radius: 50%; background: var(--text3); animation: pulse 1.3s infinite; }
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulse { 0%,80%,100%{opacity:0.2;transform:scale(0.8)} 40%{opacity:1;transform:scale(1)} }
+
+  /* Input area */
+  .input-area { border-top: 1px solid var(--border); background: var(--bg2); padding: 12px 20px; flex-shrink: 0; }
+  .quick-questions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .qq { padding: 5px 10px; font-size: 11.5px; border-radius: 20px; border: 1px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.12s; white-space: nowrap; }
+  .qq:hover { border-color: var(--accent); color: var(--accent); background: rgba(91,127,255,0.06); }
+  .input-row { display: flex; gap: 8px; align-items: flex-end; }
+  .text-input { flex: 1; padding: 10px 14px; font-size: 13px; font-family: 'DM Sans', sans-serif; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); outline: none; resize: none; max-height: 100px; min-height: 40px; line-height: 1.5; }
+  .text-input:focus { border-color: var(--accent); }
+  .text-input::placeholder { color: var(--text3); }
+  .send-btn { padding: 10px 16px; font-size: 13px; font-family: 'DM Sans', sans-serif; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); cursor: pointer; font-weight: 500; transition: background 0.15s; white-space: nowrap; }
+  .send-btn:hover { background: var(--accent2); }
+  .send-btn:disabled { opacity: 0.4; cursor: default; }
+
+  /* Empty state */
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 12px; color: var(--text3); text-align: center; padding: 40px; }
+  .empty-icon { font-size: 40px; opacity: 0.4; }
+  .empty-title { font-size: 15px; color: var(--text2); font-weight: 500; }
+  .empty-sub { font-size: 12px; max-width: 280px; line-height: 1.6; }
+
+  /* Error toast */
+  .toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 16px; background: rgba(248,113,113,0.15); border: 1px solid rgba(248,113,113,0.3); color: var(--red); border-radius: var(--radius); font-size: 12px; z-index: 100; animation: fadeIn 0.2s ease; }
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-icon">📊</div>
+      <div>
+        <div class="logo-text">AI Analyst</div>
+        <div class="logo-sub">Perencanaan &amp; Evaluasi</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="badge badge-green" id="status-badge">● Siap</span>
+      <span class="badge badge-blue" id="sheet-count-badge">0 Sheet</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Tambah Google Sheet</div>
+        <div class="sheet-input-wrap">
+          <textarea class="sheet-url-input" id="sheet-url-input" placeholder="Paste link Google Sheet publik..." rows="3"></textarea>
+          <input type="text" class="sheet-url-input" id="sheet-name-input" placeholder="Nama sheet (opsional)" style="min-height:auto;height:34px;resize:none;" />
+          <button class="load-btn" id="load-btn" onclick="loadSheet()">Load Sheet →</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="sidebar-section" style="padding-bottom:4px;">
+        <div class="sidebar-label">Sheet Terhubung</div>
+      </div>
+      <div class="sheet-list" id="sheet-list">
+        <div style="font-size:11px;color:var(--text3);padding:4px 10px;">Belum ada sheet</div>
+      </div>
+      <div class="divider"></div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Panduan URL</div>
+        <div style="font-size:11px;color:var(--text3);line-height:1.6;">
+          Pastikan sheet sudah dibagikan: <br><b style="color:var(--text2)">File → Share → Anyone with link</b><br><br>
+          URL format:<br>
+          <code style="font-size:10px;color:var(--accent);background:var(--bg3);padding:2px 5px;border-radius:4px;display:block;margin-top:4px;word-break:break-all;">docs.google.com/spreadsheets/d/[ID]/...</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+      <div class="chat-container" id="chat">
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon">📂</div>
+          <div class="empty-title">Belum ada data terhubung</div>
+          <div class="empty-sub">Paste link Google Sheet Anda di sidebar kiri untuk mulai menganalisis data perencanaan dan evaluasi.</div>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <div class="quick-questions" id="quick-questions" style="display:none;">
+          <button class="qq" onclick="ask('Berikan ringkasan dan insight utama dari data ini')">Ringkasan & insight</button>
+          <button class="qq" onclick="ask('Kolom apa saja yang tersedia dalam data ini?')">Lihat kolom data</button>
+          <button class="qq" onclick="ask('Buat grafik bar dari data ini')">Buat grafik bar</button>
+          <button class="qq" onclick="ask('Tampilkan 10 baris pertama data')">Lihat data</button>
+          <button class="qq" onclick="ask('Apa anomali atau data yang perlu perhatian?')">Deteksi anomali</button>
+          <button class="qq" onclick="ask('Buat grafik tren dari kolom numerik utama')">Grafik tren</button>
+        </div>
+        <div class="input-row">
+          <textarea class="text-input" id="msg-input" placeholder="Tanyakan sesuatu tentang data Anda... (Enter untuk kirim)" rows="1"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}"
+            oninput="this.style.height='40px';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+          <button class="send-btn" id="send-btn" onclick="sendMsg()">Kirim</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+const sheets = [];
+let activeSheetIdx = -1;
+let isBusy = false;
+let chartInstances = {};
+
+// ─── Sheet Loading ────────────────────────────────────────────────────────────
+function extractSheetId(url) {
+  const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+
+async function loadSheet() {
+  const urlInput = document.getElementById('sheet-url-input');
+  const nameInput = document.getElementById('sheet-name-input');
+  const btn = document.getElementById('load-btn');
+  const url = urlInput.value.trim();
+  if (!url) return showToast('Paste link Google Sheet terlebih dahulu');
+
+  const id = extractSheetId(url);
+  if (!id) return showToast('URL tidak valid. Pastikan format URL Google Sheets benar.');
+
+  btn.disabled = true;
+  btn.textContent = 'Memuat...';
+
+  try {
+    const csvUrl = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=0`;
+    const res = await fetch(csvUrl);
+    if (!res.ok) throw new Error('Tidak dapat mengakses sheet. Pastikan sheet sudah dibagikan publik.');
+    const text = await res.text();
+    const { headers, rows } = parseCSV(text);
+    if (!headers.length) throw new Error('Sheet kosong atau tidak dapat dibaca');
+
+    const name = nameInput.value.trim() || `Sheet ${sheets.length + 1}`;
+    const colors = ['#3ecf8e','#5b7fff','#f59e0b','#a78bfa','#f87171','#38bdf8'];
+    sheets.push({ id, name, headers, rows, url: csvUrl, color: colors[sheets.length % colors.length] });
+
+    urlInput.value = '';
+    nameInput.value = '';
+    renderSheetList();
+    selectSheet(sheets.length - 1);
+    document.getElementById('quick-questions').style.display = 'flex';
+    document.getElementById('empty-state').style.display = 'none';
+    updateBadge();
+    addMsg('ai', `<b>${name}</b> berhasil dimuat! 📊<br>Ditemukan <b>${rows.length} baris</b> data dengan <b>${headers.length} kolom</b>: ${headers.slice(0,5).map(h=>`<b>${h}</b>`).join(', ')}${headers.length>5?`, dan ${headers.length-5} kolom lainnya`:''}.`);
+  } catch(e) {
+    showToast(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Load Sheet →';
+  }
+}
+
+function parseCSV(text) {
+  const lines = text.split('\n').filter(l => l.trim());
+  if (!lines.length) return { headers: [], rows: [] };
+  const parse = line => {
+    const result = []; let cur = ''; let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQ = !inQ; }
+      else if (c === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
+      else { cur += c; }
+    }
+    result.push(cur.trim());
+    return result;
+  };
+  const headers = parse(lines[0]);
+  const rows = lines.slice(1).map(l => {
+    const vals = parse(l);
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = vals[i] || ''; });
+    return obj;
+  });
+  return { headers, rows };
+}
+
+function renderSheetList() {
+  const list = document.getElementById('sheet-list');
+  if (!sheets.length) { list.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:4px 10px;">Belum ada sheet</div>'; return; }
+  list.innerHTML = sheets.map((s, i) => `
+    <div class="sheet-item ${i===activeSheetIdx?'active':''}" onclick="selectSheet(${i})">
+      <div class="sheet-dot" style="background:${s.color}"></div>
+      <div class="sheet-name-wrap">
+        <div class="sheet-name">${s.name}</div>
+        <div class="sheet-rows">${s.rows.length} baris · ${s.headers.length} kolom</div>
+      </div>
+      <div class="remove-btn" onclick="event.stopPropagation();removeSheet(${i})">×</div>
+    </div>
+  `).join('');
+}
+
+function selectSheet(idx) {
+  activeSheetIdx = idx;
+  renderSheetList();
+}
+
+function removeSheet(idx) {
+  sheets.splice(idx, 1);
+  if (activeSheetIdx >= sheets.length) activeSheetIdx = sheets.length - 1;
+  renderSheetList();
+  updateBadge();
+  if (!sheets.length) {
+    document.getElementById('empty-state').style.display = 'flex';
+    document.getElementById('quick-questions').style.display = 'none';
+  }
+}
+
+function updateBadge() {
+  document.getElementById('sheet-count-badge').textContent = `${sheets.length} Sheet`;
+}
+
+// ─── Chat UI ─────────────────────────────────────────────────────────────────
+function addMsg(role, html, extras) {
+  const chat = document.getElementById('chat');
+  document.getElementById('empty-state').style.display = 'none';
+
+  const wrap = document.createElement('div');
+  wrap.className = `msg-wrap ${role}`;
+
+  const av = document.createElement('div');
+  av.className = `av ${role}`;
+  av.textContent = role === 'ai' ? 'AI' : 'Anda';
+
+  const bub = document.createElement('div');
+  bub.className = `bubble ${role}`;
+  bub.innerHTML = html;
+
+  // Extras: KPI cards, chart, table
+  if (extras) {
+    if (extras.kpis) {
+      const kr = document.createElement('div'); kr.className = 'kpi-row';
+      extras.kpis.forEach(k => {
+        const card = document.createElement('div'); card.className = 'kpi-card';
+        card.innerHTML = `<div class="kpi-val">${k.val}</div><div class="kpi-lbl">${k.label}</div>${k.trend?`<div class="kpi-trend ${k.trend==='up'?'trend-up':'trend-dn'}">${k.trend==='up'?'▲':'▼'} ${k.trendVal||''}</div>`:''}`;
+        kr.appendChild(card);
+      });
+      bub.appendChild(kr);
+    }
+    if (extras.chart) {
+      const cw = document.createElement('div'); cw.className = 'chart-wrap';
+      const ct = document.createElement('div'); ct.className = 'chart-title'; ct.textContent = extras.chart.title || '';
+      const canvas = document.createElement('canvas');
+      const cid = 'chart-' + Date.now();
+      canvas.id = cid; canvas.style.maxHeight = '220px';
+      cw.appendChild(ct); cw.appendChild(canvas);
+      bub.appendChild(cw);
+      setTimeout(() => renderChart(cid, extras.chart), 100);
+    }
+    if (extras.table) {
+      const tw = document.createElement('div'); tw.className = 'data-table-wrap';
+      const tbl = document.createElement('table'); tbl.className = 'data-table';
+      const thead = document.createElement('thead');
+      const tr = document.createElement('tr');
+      extras.table.headers.forEach(h => { const th=document.createElement('th'); th.textContent=h; tr.appendChild(th); });
+      thead.appendChild(tr); tbl.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      extras.table.rows.forEach(row => {
+        const tr2 = document.createElement('tr');
+        extras.table.headers.forEach(h => { const td=document.createElement('td'); td.textContent=row[h]||''; tr2.appendChild(td); });
+        tbody.appendChild(tr2);
+      });
+      tbl.appendChild(tbody); tw.appendChild(tbl); bub.appendChild(tw);
+    }
+  }
+
+  wrap.appendChild(av);
+  wrap.appendChild(bub);
+  chat.appendChild(wrap);
+  chat.scrollTop = chat.scrollHeight;
+  return bub;
+}
+
+function showTyping() {
+  const wrap = document.createElement('div'); wrap.className = 'msg-wrap ai'; wrap.id = 'typing-wrap';
+  const av = document.createElement('div'); av.className = 'av ai'; av.textContent = 'AI';
+  const bub = document.createElement('div'); bub.className = 'bubble ai';
+  bub.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+  wrap.appendChild(av); wrap.appendChild(bub);
+  document.getElementById('chat').appendChild(wrap);
+  document.getElementById('chat').scrollTop = 999999;
+}
+function hideTyping() { const t=document.getElementById('typing-wrap'); if(t) t.remove(); }
+
+function showToast(msg) {
+  const t = document.createElement('div'); t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(), 4000);
+}
+
+// ─── Chart rendering ──────────────────────────────────────────────────────────
+function renderChart(canvasId, cfg) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const colors = ['rgba(91,127,255,0.8)','rgba(62,207,142,0.8)','rgba(245,158,11,0.8)','rgba(167,139,250,0.8)','rgba(248,113,113,0.8)'];
+  const borderColors = ['#5b7fff','#3ecf8e','#f59e0b','#a78bfa','#f87171'];
+
+  new Chart(ctx, {
+    type: cfg.type || 'bar',
+    data: {
+      labels: cfg.labels,
+      datasets: cfg.datasets || [{
+        label: cfg.label || 'Nilai',
+        data: cfg.data,
+        backgroundColor: cfg.type === 'line' ? 'rgba(91,127,255,0.15)' : colors,
+        borderColor: cfg.type === 'line' ? '#5b7fff' : borderColors,
+        borderWidth: 1.5,
+        borderRadius: cfg.type === 'bar' ? 4 : 0,
+        fill: cfg.type === 'line',
+        tension: 0.4,
+        pointBackgroundColor: '#5b7fff',
+        pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { labels: { color: '#8b91a8', font: { family:'DM Sans', size:11 } } }
+      },
+      scales: cfg.type === 'pie' || cfg.type === 'doughnut' ? {} : {
+        x: { ticks: { color:'#8b91a8', font:{size:10} }, grid:{color:'rgba(255,255,255,0.04)'} },
+        y: { ticks: { color:'#8b91a8', font:{size:10} }, grid:{color:'rgba(255,255,255,0.06)'} }
+      }
+    }
+  });
+}
+
+// ─── AI Analysis ──────────────────────────────────────────────────────────────
+function ask(q) {
+  document.getElementById('msg-input').value = q;
+  sendMsg();
+}
+
+async function sendMsg() {
+  if (isBusy) return;
+  const inp = document.getElementById('msg-input');
+  const q = inp.value.trim();
+  if (!q) return;
+  inp.value = ''; inp.style.height = '40px';
+
+  if (!sheets.length) { showToast('Tambahkan Google Sheet terlebih dahulu'); return; }
+
+  addMsg('user', q);
+  isBusy = true;
+  document.getElementById('send-btn').disabled = true;
+  showTyping();
+
+  // Build data context
+  const sheet = sheets[activeSheetIdx >= 0 ? activeSheetIdx : 0];
+  const maxRows = 60;
+  const sampleRows = sheet.rows.slice(0, maxRows);
+
+  // Check for numeric columns
+  const numericCols = sheet.headers.filter(h => {
+    const vals = sheet.rows.slice(0,20).map(r => r[h]).filter(v=>v);
+    const numCount = vals.filter(v => !isNaN(parseFloat(v.replace(/[,\.]/g,'').replace(',','.'))) && v.trim()!=='').length;
+    return numCount > vals.length * 0.5;
+  });
+
+  const dataContext = `
+SHEET: ${sheet.name}
+TOTAL BARIS: ${sheet.rows.length}
+KOLOM (${sheet.headers.length}): ${sheet.headers.join(', ')}
+KOLOM NUMERIK: ${numericCols.join(', ') || 'tidak terdeteksi'}
+
+SAMPLE DATA (${Math.min(maxRows, sheet.rows.length)} baris pertama):
+${JSON.stringify(sampleRows, null, 0).substring(0, 6000)}
+`;
+
+  const systemPrompt = `Anda adalah AI analyst ahli perencanaan dan evaluasi pemerintah/organisasi yang membantu menganalisis data dari Google Sheets.
+
+Anda memiliki akses ke data berikut:
+${dataContext}
+
+INSTRUKSI PENTING:
+1. Jawab dalam Bahasa Indonesia yang profesional dan ringkas.
+2. Jika pengguna minta grafik/visualisasi, kembalikan HANYA JSON dalam blok \`\`\`chart\`\`\` seperti ini:
+\`\`\`chart
+{"type":"bar","title":"Judul Grafik","labels":["A","B","C"],"data":[10,20,30],"label":"Nama Series"}
+\`\`\`
+Type yang tersedia: bar, line, pie, doughnut. Gunakan data NYATA dari sheet.
+
+3. Jika pengguna minta lihat data/tabel, kembalikan JSON dalam blok \`\`\`table\`\`\`:
+\`\`\`table
+{"headers":["Kol1","Kol2"],"rows":[{"Kol1":"val1","Kol2":"val2"}]}
+\`\`\`
+Maksimal 10 baris untuk tabel.
+
+4. Untuk KPI/angka penting, kembalikan JSON dalam blok \`\`\`kpi\`\`\`:
+\`\`\`kpi
+[{"val":"87%","label":"Realisasi","trend":"up","trendVal":"vs bulan lalu"},{"val":"12","label":"Unit"}]
+\`\`\`
+
+5. Selalu berikan insight dan rekomendasi yang actionable.
+6. Jika data tidak cukup untuk menjawab pertanyaan, jelaskan dengan jelas.
+7. Boleh kombinasikan teks + chart/kpi/table dalam satu respons.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1200,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: q }]
+      })
+    });
+    const data = await res.json();
+    const raw = data.content?.map(b => b.text || '').join('') || 'Tidak ada respons.';
+
+    hideTyping();
+
+    // Parse special blocks
+    let text = raw;
+    let chartCfg = null, tableCfg = null, kpiCfg = null;
+
+    const chartMatch = raw.match(/```chart\n?([\s\S]*?)```/);
+    if (chartMatch) { try { chartCfg = JSON.parse(chartMatch[1]); } catch(e){} text = text.replace(chartMatch[0], ''); }
+
+    const tableMatch = raw.match(/```table\n?([\s\S]*?)```/);
+    if (tableMatch) { try { tableCfg = JSON.parse(tableMatch[1]); } catch(e){} text = text.replace(tableMatch[0], ''); }
+
+    const kpiMatch = raw.match(/```kpi\n?([\s\S]*?)```/);
+    if (kpiMatch) { try { kpiCfg = JSON.parse(kpiMatch[1]); } catch(e){} text = text.replace(kpiMatch[0], ''); }
+
+    // Clean and format text
+    text = text.trim()
+      .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+      .replace(/\*(.*?)\*/g, '<i>$1</i>')
+      .replace(/\n\n/g, '<br><br>')
+      .replace(/\n/g, '<br>')
+      .replace(/- (.*?)(<br>|$)/g, '• $1<br>');
+
+    addMsg('ai', text || '', { chart: chartCfg, table: tableCfg, kpis: kpiCfg });
+
+  } catch(e) {
+    hideTyping();
+    addMsg('ai', `<b>Error:</b> ${e.message}. Pastikan Anda terhubung ke internet.`);
+  } finally {
+    isBusy = false;
+    document.getElementById('send-btn').disabled = false;
+  }
+}
+
+// Welcome
+addMsg('ai', 'Selamat datang di <b>AI Analyst Perencanaan & Evaluasi</b> 👋<br><br>Mulai dengan paste link Google Sheet publik Anda di sidebar kiri. Saya bisa membantu:<br>• Meringkas dan menganalisis data<br>• Membuat grafik (bar, line, pie)<br>• Mendeteksi anomali dan tren<br>• Menjawab pertanyaan spesifik tentang data Anda');
+</script>
+</body>
+</html>
